@@ -1,0 +1,11 @@
+# Normalize line endings
+* text=auto eol=lf
+
+# Scripts siempre LF
+*.sh text eol=lf
+*.py text eol=lf
+
+# Binarios
+*.zip binary
+*.png binary
+*.jpg binary
