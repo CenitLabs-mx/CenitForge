@@ -1,0 +1,81 @@
+# Enforcement Seed V5
+# Controles preventivos mínimos activos desde M1.
+# Se activan (no se instalan) al escalar a M2/M3.
+
+version: "1.0"
+maturity: M1
+last_updated: "2026-05-27T10:00:00Z"
+
+seed_controls:
+  - id: SEED-001
+    type: postgresql_rls
+    status: skeleton
+    description: "RLS habilitado en tablas base, policies a completar en M2"
+    tables:
+      - users
+      - tenants
+      - invoices
+    activation_trigger: "M2"
+    
+  - id: SEED-002
+    type: vault
+    status: stub
+    description: "HashiCorp Vault configurado, secrets vacíos"
+    provider: hashicorp
+    endpoint: "https://vault.internal:8200"
+    activation_trigger: "Primer secret productivo"
+    
+  - id: SEED-003
+    type: sanitizer
+    status: local
+    description: "Presidio local con reglas básicas PII"
+    modes: [redact, pseudonymize]
+    activation_trigger: "Primer payload a LLM externo"
+    
+  - id: SEED-004
+    type: tenant_middleware
+    status: registered
+    description: "Middleware de tenant context registrado"
+    enforcement: log_only  # blocking en M2
+    activation_trigger: "M2"
+    
+  - id: SEED-005
+    type: secret_scan
+    status: active
+    description: "gitleaks pre-commit hook"
+    blocking: true
+    activation_trigger: "N/A (siempre activo)"
+    
+  - id: SEED-006
+    type: egress_allowlist
+    status: permissive
+    description: "Sandbox con allowlist amplia en M1"
+    allowlist:
+      - "*.npmjs.org"
+      - "*.pypi.org"
+      - "*.github.com"
+      - "*.stackoverflow.com"
+    tighten_in: M2
+    
+  - id: SEED-007
+    type: blast_radius_gate
+    status: warn_only
+    description: "Blast radius gate en modo warning"
+    activation_trigger: "M2 (modo blocking)"
+
+activation_matrix:
+  M1:
+    blocking: [SEED-005]
+    log_only: [SEED-001, SEED-004, SEED-006, SEED-007]
+    stub: [SEED-002, SEED-003]
+  M2:
+    blocking: [SEED-001, SEED-004, SEED-005, SEED-007]
+    active: [SEED-002, SEED-003]
+    tightened: [SEED-006]
+  M3:
+    blocking: [SEED-001, SEED-004, SEED-005, SEED-006, SEED-007]
+    active: [SEED-002, SEED-003]
+    additional:
+      - semantic_drift_detector
+      - shadow_safety_contract
+      - mutation_testing_full

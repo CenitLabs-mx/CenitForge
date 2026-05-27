@@ -1,0 +1,49 @@
+name: Enforcement Verifier (Scheduled)
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
+
+jobs:
+  verify-invariants:
+    name: Verify All Invariants (Production)
+    runs-on: ubuntu-latest
+    environment: production-readonly
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Install deps
+        run: pip install pyyaml psycopg2-binary hmac
+      
+      - name: Run enforcement verifier (all invariants)
+        env:
+          DATABASE_URL: ${{ secrets.PROD_READ_ONLY_DATABASE_URL }}
+          ENFORCEMENT_SIGNING_KEY: ${{ secrets.ENFORCEMENT_SIGNING_KEY }}
+        run: |
+          python tools/enforcement_verifier.py \
+            --phase production_deploy \
+            --maturity M3 \
+            --repo . \
+            --output /tmp/verification-report.json
+      
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: enforcement-report-${{ github.run_id }}
+          path: /tmp/verification-report.json
+      
+      - name: Alert on failures
+        if: failure()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "🚨 Enforcement Verifier FAILED - check run ${{ github.run_id }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SECURITY_WEBHOOK }}

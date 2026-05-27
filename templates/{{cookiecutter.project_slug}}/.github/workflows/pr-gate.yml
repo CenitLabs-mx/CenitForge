@@ -1,0 +1,379 @@
+name: PR Gate - Full V5 Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+
+jobs:
+  # ============================================
+  # Stage 1: Static Analysis (parallel)
+  # ============================================
+  
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install deps
+        run: pip install -r requirements-dev.txt
+      - name: Ruff lint
+        run: ruff check . --output-format=github
+      - name: MyPy type check
+        run: mypy src/ tests/
+      - name: Black format check
+        run: black --check .
+  
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+  
+  pii-scan:
+    name: PII Log Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Scan for PII in log statements
+        run: |
+          python tools/pii_log_scanner.py \
+            --paths src/ app/ \
+            --severity block \
+            --output-format github
+  
+  data-classification-lint:
+    name: Data Classification Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install deps
+        run: pip install pyyaml
+      - name: Lint data-classification.yaml
+        run: python tools/data_classification_linter.py
+  
+  # ============================================
+  # Stage 2: Security (parallel)
+  # ============================================
+  
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/owasp-top-ten
+            p/python
+            p/security-audit
+          generateSarif: "1"
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+  
+  dependency-scan:
+    name: Dependency Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+  
+  # ============================================
+  # Stage 3: Tests (sequential, depends on Stage 1)
+  # ============================================
+  
+  unit-tests:
+    name: Unit Tests
+    needs: [lint]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install deps
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run unit tests
+        run: pytest tests/unit/ -v --cov=src --cov-report=xml
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+  
+  integration-tests:
+    name: Integration Tests
+    needs: [lint]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install deps
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        run: alembic upgrade head
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+        run: pytest tests/integration/ -v
+  
+  tenant-isolation-tests:
+    name: Tenant Isolation Tests
+    needs: [integration-tests]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install deps
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Run tenant isolation tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        run: pytest tests/security/tenant_isolation/ -v
+  
+  mutation-tests:
+    name: Mutation Testing (R2/R3 only)
+    needs: [unit-tests]
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'risk:R2') || contains(github.event.pull_request.labels.*.name, 'risk:R3')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install deps
+        run: pip install -r requirements.txt -r requirements-dev.txt mutmut
+      - name: Run mutation tests
+        run: |
+          mutmut run --paths-to-mutate src/ --use-coverage
+          mutmut results
+      - name: Check mutation score
+        run: |
+          SCORE=$(mutmut junitxml | grep -oP 'mutation score="\K[0-9.]+')
+          if (( $(echo "$SCORE < 80" | bc -l) )); then
+            echo "Mutation score $SCORE < 80%"
+            exit 1
+          fi
+  
+  # ============================================
+  # Stage 4: Gates (depends on all above)
+  # ============================================
+  
+  blast-radius-gate:
+    name: Blast Radius Gate
+    needs: [unit-tests, integration-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Check blast radius
+        run: |
+          pip install pyyaml
+          python ci/blast_radius_gate.py ${{ github.event.pull_request.number }}
+  
+  semantic-drift-check:
+    name: Semantic Drift Check
+    needs: [unit-tests]
+    runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'risk:R2') || contains(github.event.pull_request.labels.*.name, 'risk:R3')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install deps
+        run: pip install sentence-transformers numpy
+      - name: Detect semantic drift
+        run: |
+          python tools/semantic_drift_detector.py \
+            --pr docs/product/prd.md \
+            --code $(git diff --name-only origin/main...HEAD -- 'src/**/*.py' | tr '\n' ' ') \
+            --tests $(git diff --name-only origin/main...HEAD -- 'tests/**/*.py' | tr '\n' ' ') \
+            --threshold 0.85
+  
+  migration-dryrun:
+    name: Migration Dry-Run
+    needs: [integration-tests]
+    runs-on: ubuntu-latest
+    if: contains(join(github.event.pull_request.labels.*.name, ','), 'migrations')
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        run: alembic upgrade head
+      - name: Verify rollback
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        run: alembic downgrade -1
+  
+  enforcement-verifier:
+    name: Enforcement Verifier
+    needs: [unit-tests, integration-tests, tenant-isolation-tests]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install deps
+        run: pip install -r requirements.txt pyyaml psycopg2-binary
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+        run: alembic upgrade head
+      - name: Verify enforcement
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          ENFORCEMENT_SIGNING_KEY: ci-test-key-not-for-production
+        run: |
+          python tools/enforcement_verifier.py \
+            --phase ci_cd \
+            --maturity M2 \
+            --repo .
+  
+  # ============================================
+  # Stage 5: Build & Summary
+  # ============================================
+  
+  build:
+    name: Build
+    needs: [lint, secret-scan, pii-scan, data-classification-lint, sast, dependency-scan, unit-tests, integration-tests, tenant-isolation-tests, blast-radius-gate, enforcement-verifier]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: |
+          docker build -t app:${{ github.sha }} .
+          docker save app:${{ github.sha }} > /tmp/app.tar
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp/app.tar
+  
+  pr-summary:
+    name: PR Summary
+    needs: [build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const jobs = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId
+            });
+            
+            const failed = jobs.data.jobs.filter(j => j.conclusion === 'failure');
+            const passed = jobs.data.jobs.filter(j => j.conclusion === 'success');
+            
+            let body = '## 📊 PR Gate Summary\n\n';
+            body += `✅ **Passed:** ${passed.length}\n`;
+            body += `❌ **Failed:** ${failed.length}\n\n`;
+            
+            if (failed.length > 0) {
+              body += '### Failed Jobs\n';
+              failed.forEach(j => {
+                body += `- ${j.name}: [logs](${j.html_url})\n`;
+              });
+            }
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body
+            });

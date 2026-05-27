@@ -1,0 +1,58 @@
+name: Knowledge Quarantine Audit
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly on Monday at 2 AM
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Audit Knowledge Layer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Install deps
+        run: pip install pyyaml
+      
+      - name: Run quarantine audit
+        run: |
+          python knowledge/quarantine_auditor.py \
+            --config docs/learning/knowledge-quarantine.yaml \
+            --artifacts docs/learning/raw/ \
+            --output /tmp/quarantine-audit.json
+      
+      - name: Check for violations
+        run: |
+          VIOLATIONS=$(jq '.violations | length' /tmp/quarantine-audit.json)
+          if [[ "$VIOLATIONS" -gt 0 ]]; then
+            echo "::error::$VIOLATIONS quarantine violations detected"
+            jq '.violations' /tmp/quarantine-audit.json
+            
+            # Create issue
+            gh issue create \
+              --title "🚨 Knowledge Quarantine violations" \
+              --body-file /tmp/quarantine-audit.json \
+              --label "compliance,knowledge"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Apply decay function
+        run: |
+          python knowledge/decay_applier.py \
+            --config docs/learning/knowledge-quarantine.yaml \
+            --artifacts docs/learning/raw/
+      
+      - name: Commit decay updates
+        run: |
+          git config user.name "Knowledge Bot"
+          git config user.email "knowledge@example.com"
+          git add docs/learning/
+          git diff --quiet || git commit -m "chore: apply knowledge decay"
+          git push

@@ -1,0 +1,285 @@
+name: Production Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force_skip_gates:
+        description: 'Emergency mode (requires approval)'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+env:
+  ENVIRONMENT: production
+
+jobs:
+  # ============================================
+  # Stage 1: Pre-deployment validation
+  # ============================================
+  
+  preflight:
+    name: Pre-flight Checks
+    runs-on: ubuntu-latest
+    outputs:
+      emergency_mode: ${{ steps.check.outputs.emergency }}
+      can_deploy: ${{ steps.check.outputs.can_deploy }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check emergency budget
+        id: check
+        env:
+          EMERGENCY_API: ${{ secrets.EMERGENCY_BUDGET_API }}
+        run: |
+          # Verificar si hay budget de emergencia disponible
+          BALANCE=$(curl -s "$EMERGENCY_API/balance" | jq -r .balance)
+          if [[ "${{ github.event.inputs.force_skip_gates }}" == "true" ]]; then
+            if [[ "$BALANCE" -lt 5 ]]; then
+              echo "::error::Emergency mode requires 5 tech debt credits capacity"
+              exit 1
+            fi
+            echo "emergency=true" >> $GITHUB_OUTPUT
+          else
+            echo "emergency=false" >> $GITHUB_OUTPUT
+          fi
+          echo "can_deploy=true" >> $GITHUB_OUTPUT
+      
+      - name: Regulatory compliance check
+        run: |
+          if [[ -f /tmp/DEPLOYMENT_BLOCKED ]]; then
+            echo "::error::Deployment blocked by regulatory changes"
+            cat /tmp/DEPLOYMENT_BLOCKED
+            exit 1
+          fi
+  
+  # ============================================
+  # Stage 2: Staging validation
+  # ============================================
+  
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [preflight]
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+      
+      - name: Load image
+        run: docker load < /tmp/app.tar
+      
+      - name: Deploy to staging
+        env:
+          KUBE_CONFIG: ${{ secrets.STAGING_KUBE_CONFIG }}
+        run: |
+          kubectl --kubeconfig <(echo "$KUBE_CONFIG") \
+            set image deployment/app app=app:${{ github.sha }} \
+            -n staging
+          kubectl --kubeconfig <(echo "$KUBE_CONFIG") \
+            rollout status deployment/app -n staging --timeout=300s
+      
+      - name: Apply migrations (staging)
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          docker run --rm \
+            -e DATABASE_URL \
+            app:${{ github.sha }} \
+            alembic upgrade head
+      
+      - name: Run E2E smoke tests
+        run: |
+          pytest tests/e2e/smoke/ --base-url https://staging.example.com
+      
+      - name: Webhook gauntlet
+        run: |
+          pytest tests/e2e/webhooks/ --base-url https://staging.example.com
+      
+      - name: Billing state-machine tests
+        if: contains(join(github.event.commits.*.message, ' '), 'billing')
+        run: |
+          pytest tests/e2e/billing/ --base-url https://staging.example.com
+  
+  # ============================================
+  # Stage 3: Production approval
+  # ============================================
+  
+  approval-gate:
+    name: Production Approval
+    needs: [deploy-staging]
+    runs-on: ubuntu-latest
+    environment: production-approval
+    steps:
+      - name: Wait for approval
+        run: echo "Approved by ${{ github.actor }}"
+  
+  # ============================================
+  # Stage 4: Production deploy (blue-green)
+  # ============================================
+  
+  deploy-production:
+    name: Deploy to Production
+    needs: [approval-gate]
+    runs-on: ubuntu-latest
+    environment: production
+    strategy:
+      matrix:
+        color: [blue, green]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image
+          path: /tmp
+      
+      - name: Load image
+        run: docker load < /tmp/app.tar
+      
+      - name: Push to registry
+        run: |
+          docker tag app:${{ github.sha }} registry.example.com/app:${{ github.sha }}
+          docker push registry.example.com/app:${{ github.sha }}
+      
+      - name: Deploy ${{ matrix.color }}
+        env:
+          KUBE_CONFIG: ${{ secrets.PROD_KUBE_CONFIG }}
+        run: |
+          kubectl --kubeconfig <(echo "$KUBE_CONFIG") \
+            set image deployment/app-${{ matrix.color }} \
+            app=registry.example.com/app:${{ github.sha }} \
+            -n production
+          kubectl --kubeconfig <(echo "$KUBE_CONFIG") \
+            rollout status deployment/app-${{ matrix.color }} \
+            -n production --timeout=600s
+      
+      - name: Health check ${{ matrix.color }}
+        run: |
+          for i in {1..30}; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+              https://${{ matrix.color }}.internal.example.com/healthz)
+            if [[ "$STATUS" == "200" ]]; then
+              echo "✅ ${{ matrix.color }} is healthy"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "❌ Health check failed"
+          exit 1
+      
+      - name: Apply migrations (production)
+        if: matrix.color == 'blue'
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          # Expand phase only, no contract
+          docker run --rm \
+            -e DATABASE_URL \
+            registry.example.com/app:${{ github.sha }} \
+            alembic upgrade head
+      
+      - name: Shadow billing (if applicable)
+        if: contains(join(github.event.commits.*.message, ' '), 'billing') && matrix.color == 'blue'
+        run: |
+          python tools/shadow_billing_runner.py \
+            --duration 7d \
+            --new-version ${{ github.sha }} \
+            --safety-contract tests/shadow/safety_contract.py
+  
+  # ============================================
+  # Stage 5: Traffic switch
+  # ============================================
+  
+  switch-traffic:
+    name: Switch Traffic
+    needs: [deploy-production]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Determine active color
+        id: active
+        env:
+          KUBE_CONFIG: ${{ secrets.PROD_KUBE_CONFIG }}
+        run: |
+          CURRENT=$(kubectl --kubeconfig <(echo "$KUBE_CONFIG") \
+            get service app -n production \
+            -o jsonpath='{.spec.selector.color}')
+          if [[ "$CURRENT" == "blue" ]]; then
+            echo "new_color=green" >> $GITHUB_OUTPUT
+            echo "old_color=blue" >> $GITHUB_OUTPUT
+          else
+            echo "new_color=blue" >> $GITHUB_OUTPUT
+            echo "old_color=green" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Canary 10%
+        run: |
+          kubectl --kubeconfig <(echo "$KUBE_CONFIG") \
+            patch service app -n production \
+            -p '{"spec":{"selector":{"color":"${{ steps.active.outputs.new_color }}"},"trafficDistribution":{"${{ steps.active.outputs.new_color }}":10}}}'
+          sleep 300
+          # Verificar error rate
+          ERROR_RATE=$(curl -s https://metrics.internal/app_errors | jq .rate)
+          if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+            echo "❌ Error rate too high, rolling back"
+            exit 1
+          fi
+      
+      - name: Full switch
+        env:
+          KUBE_CONFIG: ${{ secrets.PROD_KUBE_CONFIG }}
+        run: |
+          kubectl --kubeconfig <(echo "$KUBE_CONFIG") \
+            patch service app -n production \
+            -p '{"spec":{"selector":{"color":"${{ steps.active.outputs.new_color }}"}}}'
+      
+      - name: Post-deploy verification
+        run: |
+          sleep 60
+          pytest tests/e2e/smoke/ --base-url https://api.example.com
+          
+      - name: Notify
+        if: always()
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "text": "Production deploy ${{ job.status }}: ${{ github.sha }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+  
+  # ============================================
+  # Stage 6: Rollback (automatic on failure)
+  # ============================================
+  
+  rollback:
+    name: Auto Rollback
+    needs: [switch-traffic]
+    if: failure()
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Rollback traffic
+        env:
+          KUBE_CONFIG: ${{ secrets.PROD_KUBE_CONFIG }}
+        run: |
+          # Switch back to previous color
+          kubectl --kubeconfig <(echo "$KUBE_CONFIG") \
+            rollout undo deployment/app-${{ needs.switch-traffic.outputs.new_color }} \
+            -n production
+      - name: Alert on-call
+        run: |
+          curl -X POST ${{ secrets.PAGERDUTY_WEBHOOK }} \
+            -d '{"event":"rollback_triggered","sha":"${{ github.sha }}"}'

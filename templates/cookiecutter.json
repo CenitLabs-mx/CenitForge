@@ -1,0 +1,24 @@
+{
+  "project_name": "Mi SaaS B2B",
+  "project_slug": "{{ cookiecutter.project_name.lower().replace(' ', '_').replace('-', '_') }}",
+  "project_description": "SaaS B2B multi-tenant construido con CenitForge",
+  "author_name": "Tu Nombre",
+  "author_email": "tu@email.com",
+  "initial_maturity": ["M1", "M2", "M3"],
+  "primary_llm_provider": ["anthropic", "openai", "google"],
+  "critic_llm_family": ["different_from_builder", "same_family_with_checklist"],
+  "orchestrator": ["checklist_git", "temporal", "airflow", "prefect"],
+  "sanitizer_backend": ["presidio", "gcp_dlp", "private_ai"],
+  "jurisdiction": ["ccpa_us", "gdpr_eu", "lfpdppp_mx", "lgpd_br"],
+  "has_billing": ["yes", "no"],
+  "has_multi_tenancy": ["yes", "no"],
+  "primary_language": ["python", "typescript", "go"],
+  "include_examples": ["yes", "no"],
+  "include_runbooks": ["yes", "no"],
+  "include_terraform": ["yes", "no"],
+  "_copy_without_render": [
+    ".github/workflows/*",
+    "*.terraform",
+    "*.tf"
+  ]
+}

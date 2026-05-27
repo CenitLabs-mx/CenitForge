@@ -1,0 +1,46 @@
+# Data Classification Schema - Ejecutable
+# Validado por Data Classification Linter en CI
+
+version: "1.0"
+
+levels:
+  public:
+    controls: []
+    llm_policy: allow_raw
+    log_policy: allow
+  internal:
+    controls: [rbac]
+    llm_policy: allow_raw
+    log_policy: allow
+  confidential:
+    controls: [encryption_at_rest, tenant_scope, sanitizer]
+    llm_policy: sanitize
+    log_policy: redact
+  restricted:
+    controls: [vault, rotation, audit_log]
+    llm_policy: block
+    log_policy: never
+
+tables:
+  users:
+    level: confidential
+    fields:
+      id: { level: internal }
+      email: { level: confidential, sanitizer: email_hash, pii_type: direct_identifier }
+      name: { level: confidential, sanitizer: name_pseudonymize }
+      password_hash: { level: restricted, vault: false, log: never }
+
+  invoices:
+    level: confidential
+    fields:
+      id: { level: internal }
+      tenant_id: { level: internal }
+      amount_cents: { level: confidential, log: redact }
+
+rules:
+  - id: DC-001
+    name: no_pii_in_logs
+    severity: block
+  - id: DC-002
+    name: restricted_never_to_llm
+    severity: block

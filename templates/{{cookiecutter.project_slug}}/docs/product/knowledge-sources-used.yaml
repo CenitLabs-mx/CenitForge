@@ -1,0 +1,32 @@
+# Trazabilidad de fuentes usadas en PRD
+# Generado automáticamente al cierre de Fase 1
+
+prd_id: "PRD-2026-001"
+generated_at: "2026-05-27T12:00:00Z"
+quarantine_check: PASSED
+
+sources_used:
+  - id: reddit_post_12345
+    section: "2. Evidencia a favor"
+    citation: "E1"
+    weight: 0.92
+    
+  - id: g2_review_67890
+    section: "4. Segmentos afectados"
+    citation: "Tabla 1"
+    weight: 0.88
+    
+  - id: ahrefs_keyword_report_2026Q2
+    section: "7. Evidencia cuantitativa"
+    citation: "Tabla SEO"
+    weight: 1.00
+
+sources_excluded:
+  - id: incident_postmortem_2026_03
+    reason: "Knowledge Quarantine: production_incident no permitido en prd_generation"
+    
+  - id: old_market_research_2024
+    reason: "Decay function: weight=0.04 < min_weight=0.3"
+
+sanitization_report_hash: "sha256:..."
+quarantine_enforcer_signature: "hmac:..."

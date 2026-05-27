@@ -1,0 +1,45 @@
+name: Regulatory Change Monitor
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # Daily at 8 AM UTC
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    name: Check Regulatory Feeds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Install deps
+        run: pip install feedparser pyyaml openai
+      
+      - name: Run regulatory monitor
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_COMPLIANCE_WEBHOOK }}
+        run: |
+          python compliance/regulatory_monitor.py \
+            --feeds docs/compliance/regulatory-feeds.yaml \
+            --baseline docs/compliance/baseline.md
+      
+      - name: Check for deployment blocks
+        run: |
+          if [[ -f /tmp/DEPLOYMENT_BLOCKED ]]; then
+            echo "::warning::Deployments blocked by regulatory changes"
+            cat /tmp/DEPLOYMENT_BLOCKED
+            
+            # Create issue
+            gh issue create \
+              --title "🚨 Regulatory changes block deployments" \
+              --body "$(cat /tmp/DEPLOYMENT_BLOCKED)" \
+              --label "compliance,blocker"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

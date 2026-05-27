@@ -1,0 +1,67 @@
+# /docs/discovery/source-metadata.yaml
+# Metadata de fuentes para Knowledge Quarantine
+
+version: "1.0"
+opportunity_id: "OPP-2026-001"
+last_updated: "2026-05-27T10:00:00Z"
+
+sources:
+  - id: reddit_post_12345
+    type: forum_post
+    platform: reddit
+    subreddit: r/SaaS
+    url: https://reddit.com/r/SaaS/comments/12345
+    date: "2026-05-15"
+    hash: "sha256:abc123..."
+    author_pseudonym: user_001
+    quarantine_tags: [user_feedback, market_research]
+    source_type: user_feedback
+    allowed_feeds:
+      - market_scoring
+      - prd_generation
+      - opportunity_scorecard
+    forbidden_feeds: []
+    decay_half_life_days: 180
+    sanitization_applied: true
+    pii_detected: [email, phone]
+
+  - id: g2_review_67890
+    type: product_review
+    platform: g2
+    product: CompetitorX
+    url: https://g2.com/products/competitorx/reviews/67890
+    date: "2026-05-20"
+    hash: "sha256:def456..."
+    quarantine_tags: [user_feedback, competitor_analysis]
+    source_type: user_feedback
+    allowed_feeds:
+      - market_scoring
+      - opportunity_scorecard
+    forbidden_feeds:
+      - threat_model
+    decay_half_life_days: 365
+
+  - id: ahrefs_keyword_report_2026Q2
+    type: seo_data
+    platform: ahrefs
+    url: internal
+    date: "2026-05-25"
+    hash: "sha256:ghi789..."
+    quarantine_tags: [quantitative, market_research]
+    source_type: market_research
+    allowed_feeds:
+      - market_scoring
+      - opportunity_scorecard
+    forbidden_feeds: []
+    decay_half_life_days: 365
+
+quarantine_summary:
+  total_sources: 3
+  by_source_type:
+    user_feedback: 2
+    market_research: 1
+  feeds_covered:
+    market_scoring: 3
+    opportunity_scorecard: 3
+    prd_generation: 1
+    threat_model: 0
