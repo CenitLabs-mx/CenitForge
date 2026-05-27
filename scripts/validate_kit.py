@@ -13,6 +13,9 @@ if hasattr(sys.stdout, "reconfigure"):
 
 CRITICAL_FILES = [
     "README.md",
+    "README_ES.md",
+    "TECHNICAL_EXECUTIVE_SUMMARY.md",
+    "RESUMEN_EJECUTIVO_TECNICO.md",
     "ARCHITECTURE.md",
     "INDEX.md",
     "QUICKSTART.md",
