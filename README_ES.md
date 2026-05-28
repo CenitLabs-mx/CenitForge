@@ -1,163 +1,218 @@
-# 🏭 CenitForge V5
+# 🏭 CenitForge
 
-> **El Framework de Grado Empresarial para Ingeniería de Software con Agentes Autónomos de IA**
+> **Developer Preview para ingeniería de software auditable con agentes de IA**
 >
-> Construye aplicaciones SaaS B2B multi-tenant con guardias de seguridad 100% automatizados y verificados criptográficamente, previniendo regresiones y el desvío contextual de la IA.
+> Convierte el desarrollo con agentes de IA de “espero que el agente haya hecho lo correcto” a un flujo con plantillas, guardrails, smoke checks y evidencia firmada.
 
 <div align="center">
 
-[![Audit Score](https://img.shields.io/badge/audit%20score-97%2F100-success.svg?style=for-the-badge&logo=securityscorecard&logoColor=white)](docs/plan-maestro-v5.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge&logo=mit&logoColor=white)](LICENSE)
-[![Version](https://img.shields.io/badge/version-5.0-success.svg?style=for-the-badge&logo=git&logoColor=white)](CHANGELOG.md)
-[![Platform](https://img.shields.io/badge/platform-Docker%20%7C%20Terraform%20%7C%20Postgres-blueviolet.svg?style=for-the-badge&logo=docker&logoColor=white)](ARCHITECTURE.md)
+[![Estado](https://img.shields.io/badge/estado-developer%20preview-orange.svg?style=for-the-badge&logo=github&logoColor=white)](docs/project-status.md)
+[![Licencia: MIT](https://img.shields.io/badge/Licencia-MIT-blue.svg?style=for-the-badge&logo=mit&logoColor=white)](LICENSE)
+[![Roadmap](https://img.shields.io/badge/roadmap-v0.1.0%20preview-purple.svg?style=for-the-badge&logo=target&logoColor=white)](docs/mvp-roadmap.md)
+[![Template](https://img.shields.io/badge/template-cookiecutter-success.svg?style=for-the-badge&logo=python&logoColor=white)](cookiecutter.json)
+
+[English](README.md) · **Español**
 
 </div>
 
 ---
 
-## 🎯 El Problema Central: La Paradoja de la Ingeniería con IA
+## ✨ ¿Qué es CenitForge?
 
-Los agentes autónomos de codificación (como Claude Code, Cursor y constructores LLM a medida) pueden escribir y refactorizar código a una velocidad que ningún desarrollador humano puede igualar. Sin embargo, esta velocidad introduce una **paradoja de seguridad crítica**:
+CenitForge es un **framework en developer preview y una semilla ejecutable de proyecto** para equipos que quieren usar agentes de código con IA sin perder control sobre arquitectura, seguridad, billing o límites multi-tenant.
 
-```text
-❌ DESARROLLO TRADICIONAL CON IA:
-   [Prompt / Instrucción] ──> [Agente Genera Código] ──> [Alucinaciones / Regresiones / Fugas de PII] 
-   
-   ⚠️ Los guardias tradicionales (Linters, Unit Tests) son demasiado reactivos para prevenir el deterioro arquitectónico.
-```
-
-Un agente autónomo, con tal de resolver un ticket local y hacer pasar sus pruebas unitarias, ignorará alegremente las políticas de Row-Level Security, subirá claves de API expuestas o desviará el alcance del diseño respecto al PRD original.
-
-**CenitForge V5 resuelve esto.** Transforma el desarrollo con IA de un "chat de código" reactivo a una **línea de producción controlada con enforcement técnico**.
+Te ayuda a pasar de:
 
 ```text
-🛡️ DESARROLLO VERIFICADO CON CENITFORGE:
-   [Prompt / Instrucción] ──> [Sandbox Aislado] ──> [Verificación Criptográfica] ──> [Release Seguro]
-   
-   🚀 El código permanece auditable, robusto e inmune a regresiones—verificado programáticamente.
+Prompt -> Agente IA -> Cambios de código -> Revisión manual con miedo
 ```
+
+hacia:
+
+```text
+PRD + Contratos -> Micro-Prompt -> Guardrails -> Smoke Checks -> Evidencia firmada
+```
+
+CenitForge **todavía no es una plataforma productiva llave en mano**. Es la primera implementación pública del modelo operativo: documentación, generador de proyectos y primeros centinelas ejecutables que pueden endurecerse hasta convertirse en una plataforma completa.
 
 ---
 
-## 🏛️ Los Cinco Centinelas de CenitForge
+## 🎯 El problema: velocidad de IA sin barandales
 
-CenitForge reemplaza la confianza documental con **cinco motores de seguridad autónomos** que monitorean, sanitizan y verifican cada cambio de código en ejecución:
+Los agentes de IA se mueven rápido. A veces, demasiado rápido.
+
+Pueden:
+
+- modificar archivos fuera del alcance autorizado;
+- hacer pasar tests mientras debilitan el comportamiento real;
+- olvidar límites entre tenants;
+- filtrar secretos o PII en prompts/logs;
+- desviarse del PRD original;
+- tocar lógica de billing sin suficiente protección.
+
+CenitForge existe para hacer esos riesgos **visibles, testeables y auditables**.
+
+No promete seguridad mágica. Te da una ruta práctica para construir enforcement alrededor del desarrollo agéntico.
+
+---
+
+## 🛡️ Los Cinco Centinelas
+
+Los centinelas actuales se entregan como **implementaciones seed dentro del template de proyecto generado**.
 
 ```mermaid
 flowchart TD
-    A[Cambio de Código de IA/Humano] --> B[Sandbox Docker con Filtro de Egress]
+    A[Cambio de IA o Humano] --> B[Template de Proyecto Generado]
     B --> C[Sanitization Gateway]
-    C -->|Secrets y PII Limpios| D[Shadow Safety Contract]
-    D -->|Cero Efectos Secundarios Reales| E[Gates de Blast Radius y Drift]
-    E -->|Verificación de Invariantes Exitosa| F[Reporte de Cumplimiento Firmado con HMAC]
-    F -->|Verificar Firma Criptográfica| G[CI/CD Release Seguro a Producción]
+    C --> D[Shadow Safety Contract]
+    D --> E[Blast Radius Gate]
+    E --> F[Verificación de Invariantes]
+    F --> G[Reporte de Evidencia Firmado]
 ```
 
-### 1. 🔑 Verificación Programática de Invariantes
-El **Enforcement Verifier** (`/tools/enforcement_verifier.py`) evalúa programáticamente el cumplimiento de 20 invariantes críticas (por ejemplo, Postgres Row-Level Security, manejo financiero decimal, validación de firmas de Stripe). Tras validar, firma el reporte con **HMAC-SHA256**—requisito obligatorio para que el CI/CD permita el deployment.
+| Centinela | Qué protege | Ubicación actual | Estado |
+|---|---|---|---|
+| 🔑 Enforcement Verifier | Invariantes críticas como RLS, decimales, billing gates y secretos | `templates/{{cookiecutter.project_slug}}/tools/enforcement_verifier.py` | Seed |
+| 🛡️ Sanitization Gateway | PII/secretos antes de que payloads lleguen a LLMs externos | `templates/{{cookiecutter.project_slug}}/sanitization/gateway.py` | Seed |
+| 🧪 Shadow Safety Contract | Efectos secundarios de billing/outbound durante shadow testing | `templates/{{cookiecutter.project_slug}}/tests/shadow/shadow_safety_contract.py` | Seed |
+| 📐 Blast Radius Gate | Scope creep en diffs de PR | `templates/{{cookiecutter.project_slug}}/ci/blast_radius_gate.py` | Seed |
+| 📉 Semantic Drift Detector | Desvío entre PRD y código usando embeddings | `templates/{{cookiecutter.project_slug}}/tools/semantic_drift_detector.py` | Seed |
 
-### 2. 🛡️ Sanitization Gateway
-El **Sanitizer Proxy** (`/sanitization/gateway.py`) intercepta todos los payloads de salida hacia LLMs externos, ofuscando credenciales, API keys y datos personales (PII) sensibles antes de que salgan de tu red privada.
-
-### 3. 🧪 Shadow Safety Contract
-El **Shadow Test Runner** (`/tests/shadow/shadow_safety_contract.py`) intercepta los clientes de servicios externos (Stripe, SendGrid) durante shadow testing. Te permite probar código de facturación generado por la IA en producción real sin duplicar cargos ni enviar emails reales a usuarios reales.
-
-### 4. 📐 Blast Radius & Gate de Scope Creep
-Nuestro **Blast Radius CI Gate** (`/ci/blast_radius_gate.py`) evalúa el Git Diff físico del PR contra el presupuesto de archivos autorizados en el micro-prompt de la IA. Si el agente modifica archivos fuera de su scope por más del 10%, el PR se bloquea de inmediato.
-
-### 5. 📉 Semantic Drift Circuit Breaker
-El **Drift Detector** (`/tools/semantic_drift_detector.py`) mide la similitud coseno de embeddings vectoriales entre los requisitos funcionales del PRD original y el código generado. Si la similitud cae por debajo de 0.85, se activa un **Circuit Breaker** que detiene la ejecución para prevenir el desvío contextual.
+En releases futuros estos componentes se moverán a un paquete reutilizable como `cenitforge.enforcement`, `cenitforge.sanitization` y `cenitforge.shadow`.
 
 ---
 
-## 📊 Desarrollo de IA Tradicional vs. Ingeniería CenitForge
+## 🧭 ¿Qué es real hoy y qué está planeado?
 
-| Capacidad | Desarrollo de IA Tradicional | Ingeniería CenitForge |
-|------------|-----------------------|-----------------------|
-| **Seguridad Multi-Tenant** | Instrucciones en prompts (alto riesgo) | Políticas RLS + Verificador programático |
-| **Fuga de Secretos/Keys** | Hooks pre-commit básicos (placeholders) | Chequeos duros en Vault + Sanitizer Proxy |
-| **Pruebas de Outbound** | Mocks locales o staging manual | Shadow Safety Contract automatizado |
-| **Scope Creep (Desvío)** | Cambios descontrolados a archivos colaterales | Control de Blast Radius PR Gate estricto |
-| **Deterioro Contextual** | Degeneración progresiva del código | Semantic Drift Cosine Circuit Breaker |
-| **Prueba de Cumplimiento** | Checklists manuales y auditorías | Reportes JSON firmados criptográficamente |
+| Capacidad | Hoy | Próximo hito |
+|---|---|---|
+| Metodología maestra | ✅ Disponible en docs | Refinarla con auditorías |
+| Generador de proyectos | ✅ Seed con Cookiecutter | Más proyectos generados probados |
+| Centinelas | ✅ Implementaciones seed en template | Paquete raíz + unit tests completos |
+| Smoke validation | ✅ Checks estructurales y sintaxis | Demo end-to-end con reporte |
+| Enforcement CI/CD | ⚠️ Parcial / planeado | Gates de GitHub Actions |
+| Orquestador productivo | 🚧 Planeado | Integración M3 |
+| Release packaging | 🚧 Planeado | `v0.1.0-developer-preview` |
 
----
-
-## 📂 El Framework de 121 Archivos
-
-CenitForge no es solo teoría—es una **plantilla de repositorio completamente materializada** que te entrega:
-*   **Infraestructura como Código (IaC):** Módulos de Terraform para RDS PostgreSQL SaaS, EC2 Vault HA y ECS Sanitizer.
-*   **GitHub Actions CI/CD:** 5 workflows productivos que corren PR gates, auditorías regulatorias y deploys.
-*   **Runbooks Operativos:** 6 manuales de contingencia detallados para SRE y DevOps (ej. fugas cross-tenant).
-*   **ADRs (Architecture Decision Records):** 10 decisiones de diseño documentadas (tenancy, idempotencia, etc.).
-
-📖 **¿Quieres una perspectiva ejecutiva rápida?** Lee el [Resumen Ejecutivo Técnico](RESUMEN_EJECUTIVO_TECNICO.md).  
-📖 **¿Quieres profundizar en las 15,000 líneas del Plan Maestro?** Lee el [Plan Maestro V5](docs/plan-maestro-v5.md).
+Para la matriz honesta de implementación, revisa [`docs/project-status.md`](docs/project-status.md).
 
 ---
 
-## 🚀 Inicio Rápido: Despliega tu SaaS en 5 Minutos
+## 🚀 Inicio rápido
 
-### 1. Preparar CenitForge Localmente
-Asegúrate de contar con Python 3.11+, Terraform 1.5+ y Docker 24+. Luego clona el kit:
+### 1. Clonar e instalar
+
 ```bash
 git clone https://github.com/CenitLabs-mx/CenitForge.git
 cd CenitForge
 make install
 ```
 
-### 2. Validar la Integridad del Kit
-Corre nuestro validador multiplataforma para comprobar que todos los archivos estén listos:
+### 2. Validar el kit
+
 ```bash
-python scripts/validate_kit.py
+make validate
+make smoke
 ```
 
-### 3. Generar un Proyecto SaaS Parametrizado
-Genera un SaaS B2B a la medida y con matices de madurez configurados al instante:
+`make validate` revisa la estructura del kit.
+
+`make smoke` comprueba que los archivos seed de los centinelas existan y compilen, y ejecuta una prueba mínima de sanitización.
+
+### 3. Generar un proyecto
+
 ```bash
 make new-project
-# Cuestionario Interactivo:
-#   project_name [Mi SaaS B2B]: CenitBilling
-#   initial_maturity (M1/M2/M3) [M1]: M3
-#   primary_llm_provider (anthropic/openai/google) [anthropic]: anthropic
-#   has_billing (yes/no) [yes]: yes
 ```
 
-### 4. Inicializar y Verificar tu SaaS
-```bash
-cd cenitbilling
-make setup
-make verify
-# ✅ PostgreSQL RLS Policies: PASS
-# ✅ Vault Auto-Unseal Integration: PASS
-# ✅ Sanitizer Proxy: ACTIVE
-# 🚀 ¡Listo para codificar de forma segura con IA!
+El proyecto generado tendrá los centinelas seed dentro de sus propias carpetas `tools/`, `sanitization/`, `ci/` y `tests/`.
+
+### Windows / PowerShell
+
+Si estás en Windows y no usas GNU Make:
+
+```powershell
+python .\scripts\validate_kit.py
+.\scripts\smoke-demo.ps1
+python -m pip install cookiecutter pyyaml
+cookiecutter .\templates --output-dir ..
 ```
 
 ---
 
-## 🎓 Capacitación del Equipo por Rol
+## 🧪 El demo mínimo útil
 
-| Disciplina | Duración | Manual |
-|------------|:--------:|--------|
-| **Software Engineers** | 16 horas | [engineer-onboarding.md](docs/training/engineer-onboarding.md) |
-| **Product Managers (PMs)** | 8 horas | [pm-onboarding.md](docs/training/pm-onboarding.md) |
-| **DevOps / SRE / Platform** | 24 horas | [devops-onboarding.md](docs/training/devops-onboarding.md) |
-| **Security & Compliance** | 12 hours | [security-onboarding.md](docs/training/security-onboarding.md) |
+El objetivo inmediato es simple:
+
+```text
+Generar proyecto -> correr smoke checks -> bloquear un payload inseguro -> producir evidencia
+```
+
+Ese ciclo vale más que agregar más documentación. Revisa [`docs/mvp-roadmap.md`](docs/mvp-roadmap.md).
 
 ---
 
-## 🤝 Contribución y Gobernanza
+## 🧱 Mapa del repositorio
 
-CenitForge es una iniciativa de código abierto bajo la licencia **MIT**. Damos la bienvenida a contribuciones para agregar invariantes, optimizar linters o refinar el sandbox Docker. Por favor consulta [CONTRIBUTING.md](CONTRIBUTING.md) antes de enviar pull requests.
+```text
+.
+├── README.md
+├── README_ES.md
+├── QUICKSTART.md
+├── Makefile
+├── cookiecutter.json
+├── docs/
+│   ├── plan-maestro-v5.md
+│   ├── project-status.md
+│   └── mvp-roadmap.md
+├── scripts/
+│   ├── validate_kit.py
+│   ├── validate-kit.sh
+│   ├── smoke-demo.sh
+│   └── new-project.sh
+└── templates/
+    └── {{cookiecutter.project_slug}}/
+        ├── tools/
+        ├── sanitization/
+        ├── ci/
+        ├── tests/
+        └── docs/
+```
+
+---
+
+## 🧠 Filosofía
+
+CenitForge sigue tres principios:
+
+1. **Los agentes aceleran el trabajo; no reducen los estándares.**
+2. **La documentación ayuda, pero el enforcement protege mejor.**
+3. **Toda promesa debe estar respaldada por checks ejecutables.**
+
+Por eso ahora el proyecto se presenta como developer preview: la visión es ambiciosa, pero el release público solo debe prometer lo que puede demostrar hoy.
+
+---
+
+## 🤝 Contribuir
+
+Las mejores contribuciones ahora mismo son prácticas y verificables:
+
+- unit tests para los cinco centinelas;
+- un demo end-to-end funcional;
+- mejores casos de sanitización;
+- ejemplos de CI que ejecuten los guardrails;
+- mejor experiencia en Windows/PowerShell;
+- documentación que mantenga el alcance honesto.
+
+Consulta [`CONTRIBUTING.md`](CONTRIBUTING.md) antes de abrir un pull request.
 
 ---
 
 <div align="center">
 
 **Desarrollado por CenitLabs**  
-*Construyendo el futuro de la ingeniería agéntica con absoluta seguridad matemática.*
+*Construyendo flujos de ingeniería agéntica auditables, un guardrail a la vez.*
 
-[🚀 Guía Quickstart](QUICKSTART.md) · [📘 Plan Maestro V5](docs/plan-maestro-v5.md) · [📊 Resumen Ejecutivo](RESUMEN_EJECUTIVO_TECNICO.md)
+[🚀 Quickstart](QUICKSTART.md) · [📘 Plan Maestro](docs/plan-maestro-v5.md) · [🧭 Estado del Proyecto](docs/project-status.md) · [🛣️ Roadmap MVP](docs/mvp-roadmap.md)
 
 </div>
