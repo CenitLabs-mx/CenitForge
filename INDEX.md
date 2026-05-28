@@ -1,52 +1,62 @@
-# Índice Maestro de Archivos del Kit
+# CenitForge File Index
 
-> Referencia rápida de los archivos del kit organizados por categoría.
+Quick reference for the current developer-preview repository.
 
-## 📚 Documentación Principal
+## Primary documents
 
-- [README.md](README.md) - Punto de entrada
-- [ARCHITECTURE.md](ARCHITECTURE.md) - Arquitectura del kit
-- [QUICKSTART.md](QUICKSTART.md) - Tutorial 5 min
-- [CHANGELOG.md](CHANGELOG.md) - Historial
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Cómo contribuir
-- [LICENSE](LICENSE) - MIT
+- [README.md](README.md) - Project overview and current scope
+- [QUICKSTART.md](QUICKSTART.md) - Runnable developer-preview quickstart
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution process and quality rules
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Architecture overview
+- [TECHNICAL_EXECUTIVE_SUMMARY.md](TECHNICAL_EXECUTIVE_SUMMARY.md) - Executive technical summary
+- [LICENSE](LICENSE) - MIT License
 
-## 📘 Plan Maestro V5
+## Status and roadmap
 
-- [docs/plan-maestro-v5.md](docs/plan-maestro-v5.md) - Framework completo
-- [docs/audit-report-v5.md](docs/audit-report-v5.md) - Auditoría 97/100
-- [docs/adoption-roadmap.md](docs/adoption-roadmap.md) - Roadmap 12 semanas
+- [docs/project-status.md](docs/project-status.md) - Implemented vs seed vs planned features
+- [docs/mvp-roadmap.md](docs/mvp-roadmap.md) - Roadmap to `v0.1.0-developer-preview`
+- [docs/plan-maestro-v5.md](docs/plan-maestro-v5.md) - Full target-state methodology
+- [docs/audit-report-v5.md](docs/audit-report-v5.md) - Audit report, if present
+- [docs/adoption-roadmap.md](docs/adoption-roadmap.md) - Adoption roadmap, if present
 
-## 🎓 Capacitación
+## Training
 
-- [docs/training/engineer-onboarding.md](docs/training/engineer-onboarding.md) - 16h
-- [docs/training/pm-onboarding.md](docs/training/pm-onboarding.md) - 8h
-- [docs/training/devops-onboarding.md](docs/training/devops-onboarding.md) - 24h
-- [docs/training/security-onboarding.md](docs/training/security-onboarding.md) - 12h
+- [docs/training/engineer-onboarding.md](docs/training/engineer-onboarding.md)
+- [docs/training/pm-onboarding.md](docs/training/pm-onboarding.md)
+- [docs/training/devops-onboarding.md](docs/training/devops-onboarding.md)
+- [docs/training/security-onboarding.md](docs/training/security-onboarding.md)
 
-## 🎨 Templates
+## Templates
 
 - [templates/micro-prompt-template.md](templates/micro-prompt-template.md)
 - [templates/api-contract-template.md](templates/api-contract-template.md)
 - [templates/billing-state-machine-template.md](templates/billing-state-machine-template.md)
 
-## 🤖 CI/CD
+## Generated project seed guardrails
 
-- [.github/workflows/kit-validation.yml](.github/workflows/kit-validation.yml)
+These files live inside the generated-project template:
 
-## 📂 Cookiecutter Templates
+- `templates/{{cookiecutter.project_slug}}/tools/enforcement_verifier.py`
+- `templates/{{cookiecutter.project_slug}}/sanitization/gateway.py`
+- `templates/{{cookiecutter.project_slug}}/tests/shadow/shadow_safety_contract.py`
+- `templates/{{cookiecutter.project_slug}}/ci/blast_radius_gate.py`
+- `templates/{{cookiecutter.project_slug}}/tools/semantic_drift_detector.py`
 
-El directorio `templates/` contiene:
-- `{{cookiecutter.project_slug}}/` - Proyecto generado
-- `hooks/` - Hooks pre/post generación
+## Scripts
 
-## 🛠️ Scripts
+- [scripts/bootstrap.sh](scripts/bootstrap.sh) - Initial setup helper
+- [scripts/validate-kit.sh](scripts/validate-kit.sh) - Structural kit validation
+- [scripts/validate_kit.py](scripts/validate_kit.py) - Python structural validator
+- [scripts/smoke-demo.sh](scripts/smoke-demo.sh) - Developer-preview sentinel smoke check
+- [scripts/new-project.sh](scripts/new-project.sh) - Cookiecutter wrapper
+- [scripts/generate-index.sh](scripts/generate-index.sh) - Regenerates this file if updated
 
-- `scripts/bootstrap.sh` - Setup inicial
-- `scripts/validate-kit.sh` - Validación de integridad
-- `scripts/new-project.sh` - Wrapper de cookiecutter
-- `scripts/generate-index.sh` - Regenera este archivo
+## Make targets
 
-## 📊 Estadísticas
-
-Ver `make stats` para conteo actualizado.
+```bash
+make install
+make validate
+make smoke
+make new-project
+make stats
+```
